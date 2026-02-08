@@ -1,0 +1,10 @@
+﻿boto3
+botocore
+requests
+pydantic>=2
+strands-agents
+strands-agents-tools
+bedrock-agentcore
+bedrock-agentcore-starter-toolkit
+mcp
+jsonschema

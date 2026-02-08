@@ -1,0 +1,233 @@
+﻿[
+  {
+    "name": "get_s3_logs",
+    "lambda_arn": "",
+    "schema": {
+      "name": "get_s3_logs",
+      "description": "Fetch recent S3 objects and previews for log analysis.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "bucket": {"type": "string"},
+          "prefix": {"type": "string"},
+          "max_objects": {"type": "integer"}
+        }
+      }
+    }
+  },
+  {
+    "name": "get_emr_logs",
+    "lambda_arn": "",
+    "schema": {
+      "name": "get_emr_logs",
+      "description": "Query CloudWatch logs for EMR failures.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "log_group": {"type": "string"},
+          "start_time": {"type": "integer"},
+          "end_time": {"type": "integer"},
+          "filter": {"type": "string"}
+        }
+      }
+    }
+  },
+  {
+    "name": "get_glue_logs",
+    "lambda_arn": "",
+    "schema": {
+      "name": "get_glue_logs",
+      "description": "Query CloudWatch logs for Glue job errors.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "log_group": {"type": "string"},
+          "start_time": {"type": "integer"},
+          "end_time": {"type": "integer"},
+          "filter": {"type": "string"}
+        }
+      }
+    }
+  },
+  {
+    "name": "get_mwaa_logs",
+    "lambda_arn": "",
+    "schema": {
+      "name": "get_mwaa_logs",
+      "description": "Query CloudWatch logs for MWAA/Airflow failures.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "env_name": {"type": "string"},
+          "log_group": {"type": "string"},
+          "start_time": {"type": "integer"},
+          "end_time": {"type": "integer"}
+        }
+      }
+    }
+  },
+  {
+    "name": "get_kafka_status",
+    "lambda_arn": "",
+    "schema": {
+      "name": "get_kafka_status",
+      "description": "Describe MSK cluster state and brokers.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "cluster_arn": {"type": "string"}
+        }
+      }
+    }
+  },
+  {
+    "name": "get_cloudwatch_alarm",
+    "lambda_arn": "",
+    "schema": {
+      "name": "get_cloudwatch_alarm",
+      "description": "Fetch CloudWatch alarm state for DAG/MWAA alarms.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "alarm_name": {"type": "string"}
+        },
+        "required": ["alarm_name"]
+      }
+    }
+  },
+  {
+    "name": "get_athena_query",
+    "lambda_arn": "",
+    "schema": {
+      "name": "get_athena_query",
+      "description": "Fetch Athena query execution status and error details.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "query_execution_id": {"type": "string"}
+        },
+        "required": ["query_execution_id"]
+      }
+    }
+  },
+  {
+    "name": "verify_source_data",
+    "lambda_arn": "",
+    "schema": {
+      "name": "verify_source_data",
+      "description": "Check source data availability in S3.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "bucket": {"type": "string"},
+          "prefix": {"type": "string"},
+          "min_objects": {"type": "integer"},
+          "min_total_bytes": {"type": "integer"}
+        }
+      }
+    }
+  },
+  {
+    "name": "retry_emr",
+    "lambda_arn": "",
+    "schema": {
+      "name": "retry_emr",
+      "description": "Submit EMR steps for retry.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "cluster_id": {"type": "string"},
+          "steps": {"type": "array"},
+          "dry_run": {"type": "boolean"}
+        },
+        "required": ["cluster_id", "steps"]
+      }
+    }
+  },
+  {
+    "name": "retry_glue_job",
+    "lambda_arn": "",
+    "schema": {
+      "name": "retry_glue_job",
+      "description": "Start a Glue job run.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "job_name": {"type": "string"},
+          "arguments": {"type": "object"},
+          "timeout": {"type": "integer"}
+        },
+        "required": ["job_name"]
+      }
+    }
+  },
+  {
+    "name": "retry_airflow_dag",
+    "lambda_arn": "",
+    "schema": {
+      "name": "retry_airflow_dag",
+      "description": "Trigger an Airflow DAG run via MWAA.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "env_name": {"type": "string"},
+          "dag_id": {"type": "string"},
+          "run_id": {"type": "string"}
+        },
+        "required": ["dag_id"]
+      }
+    }
+  },
+  {
+    "name": "retry_athena_query",
+    "lambda_arn": "",
+    "schema": {
+      "name": "retry_athena_query",
+      "description": "Retry Athena query execution.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "query": {"type": "string"},
+          "database": {"type": "string"},
+          "output_location": {"type": "string"},
+          "workgroup": {"type": "string"}
+        },
+        "required": ["query", "output_location"]
+      }
+    }
+  },
+  {
+    "name": "retry_kafka",
+    "lambda_arn": "",
+    "schema": {
+      "name": "retry_kafka",
+      "description": "Return a manual action for Kafka/MSK replay.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "topic": {"type": "string"},
+          "runbook": {"type": "string"}
+        }
+      }
+    }
+  },
+  {
+    "name": "update_servicenow_ticket",
+    "lambda_arn": "",
+    "schema": {
+      "name": "update_servicenow_ticket",
+      "description": "Update a ServiceNow incident with RCA and status.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "instance_url": {"type": "string"},
+          "username": {"type": "string"},
+          "password": {"type": "string"},
+          "ticket_sys_id": {"type": "string"},
+          "payload": {"type": "object"}
+        },
+        "required": ["instance_url", "username", "password", "ticket_sys_id", "payload"]
+      }
+    }
+  }
+]

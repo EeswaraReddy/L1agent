@@ -1,0 +1,21 @@
+﻿{
+  "gateway_url": "",
+  "gateway_id": "",
+  "gateway_name": "datalake-sre-gateway",
+  "region": "us-east-1",
+  "role_arn": "",
+  "authorizer_type": "CUSTOM_JWT",
+  "authorizer_config": {
+    "customJwtAuthorizer": {
+      "discoveryUrl": "",
+      "allowedAudience": [""],
+      "allowedClients": [""]
+    }
+  },
+  "client_info": {
+    "client_id": "",
+    "client_secret": "",
+    "token_url": "",
+    "scope": ""
+  }
+}

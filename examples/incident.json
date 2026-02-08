@@ -1,0 +1,21 @@
+﻿{
+  "incident_id": "INC-1234",
+  "summary": "EMR step failed during nightly aggregation",
+  "details": "Cluster j-xxxx failed on step s-xxxx",
+  "context": {
+    "emr": {"log_group": "/aws/emr/steps"},
+    "emr_retry": {
+      "cluster_id": "j-xxxx",
+      "steps": [
+        {
+          "Name": "Retry step",
+          "ActionOnFailure": "CONTINUE",
+          "HadoopJarStep": {
+            "Jar": "command-runner.jar",
+            "Args": ["spark-submit", "s3://path/job.py"]
+          }
+        }
+      ]
+    }
+  }
+}

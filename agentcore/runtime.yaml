@@ -1,0 +1,12 @@
+﻿runtime:
+  name: datalake-incident-agent
+  entrypoint: agents.main:handler
+  python_version: "3.12"
+  env:
+    AWS_REGION: "us-east-1"
+    BEDROCK_REGION: "us-east-1"
+    MODEL_ID: "anthropic.claude-3-5-sonnet-20240620-v1:0"
+    GATEWAY_CONFIG_PATH: "agentcore/gateway_config.json"
+    RCA_BUCKET: "your-rca-bucket"
+    RCA_PREFIX: "rca/"
+    STRANDS_ENABLE_LLM: "0"

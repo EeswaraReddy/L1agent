@@ -1,0 +1,24 @@
+﻿[
+  {
+    "name": "Glue failure with zero data",
+    "incident": {
+      "incident_id": "INC-2001",
+      "summary": "Glue ETL job failed. Source data zero bytes.",
+      "details": "Job failed with size=0 on S3 input",
+      "context": {
+        "source": {"bucket": "my-bucket", "prefix": "inbound/", "min_objects": 1, "min_total_bytes": 1}
+      }
+    },
+    "expected_decision": "auto_close"
+  },
+  {
+    "name": "Unknown alarm",
+    "incident": {
+      "incident_id": "INC-2002",
+      "summary": "Alarm for dlr_grp - unknown",
+      "details": "No logs found",
+      "context": {}
+    },
+    "expected_decision": "human_review"
+  }
+]
