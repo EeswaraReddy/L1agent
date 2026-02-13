@@ -4,7 +4,7 @@ import json
 import boto3
 
 from .schemas import Incident, RCA
-from .intent_classifier import classify_intent
+from .intent_classifier import classify_intent, is_non_incident_access_request
 from .investigator import investigate
 from .action_agent import act
 from .agent_tools import intent_classifier, investigator, action_agent
@@ -55,8 +55,30 @@ def _validate_outputs(
 
 def handle_incident(payload: Dict[str, Any]) -> Dict[str, Any]:
     incident = Incident(**payload)
+    if is_non_incident_access_request(incident):
+        intent_data = classify_intent(incident, force_rule_based=True).model_dump()
+        investigation_data = {
+            "intent": intent_data["intent"],
+            "evidence": {
+                "skipped": True,
+                "reason": "Access request is not an incident investigation workflow",
+                "required_process": "Use IAM/change-management access request process",
+            },
+        }
+        action_data = {
+            "intent": intent_data["intent"],
+            "actions": [
+                {
+                    "policy_block": (
+                        "Production access cannot be granted by incident automation. "
+                        "Please submit IAM/change-management access request."
+                    )
+                }
+            ],
+            "status": "blocked",
+        }
 
-    if STRANDS_ENABLE_LLM:
+    elif STRANDS_ENABLE_LLM:
         try:
             outcome = _run_llm(incident)
             intent_data = outcome.get("intent", {})

@@ -23,6 +23,30 @@ INTENTS = [
 ]
 
 
+def is_non_incident_access_request(incident: Incident) -> bool:
+    text = f"{incident.summary} {incident.details or ''}".lower()
+    access_terms = (
+        "access to prod",
+        "production access",
+        "prod access",
+        "grant access",
+        "request access",
+        "need access",
+        "prod credentials",
+        "permission to prod",
+    )
+    request_terms = (
+        "request",
+        "grant",
+        "need",
+        "please provide",
+        "please give",
+    )
+    return any(term in text for term in access_terms) or (
+        ("prod" in text or "production" in text) and any(term in text for term in request_terms) and "access" in text
+    )
+
+
 def _rule_based_intent(text: str) -> IntentResult:
     t = text.lower()
     if "alarm" in t and ("dag" in t or "mwaa" in t or "airflow" in t):
@@ -61,10 +85,16 @@ def _llm_intent(text: str) -> IntentResult:
     return _parse_llm_result(result)
 
 
-def classify_intent(incident: Incident) -> IntentResult:
+def classify_intent(incident: Incident, force_rule_based: bool = False) -> IntentResult:
     text = f"{incident.summary} {incident.details or ''}".strip()
+    if is_non_incident_access_request(incident):
+        return IntentResult(
+            intent="access_denied",
+            confidence=0.95,
+            rationale="Access-to-production request detected; follow IAM/change-management access process",
+        )
 
-    if not STRANDS_ENABLE_LLM:
+    if force_rule_based or not STRANDS_ENABLE_LLM:
         return _rule_based_intent(text)
 
     try:

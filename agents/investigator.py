@@ -69,8 +69,8 @@ def _llm_investigate(incident: Incident, intent: str) -> InvestigationResult:
     return _parse_llm_result(result)
 
 
-def investigate(incident: Incident, intent: str) -> InvestigationResult:
-    if not STRANDS_ENABLE_LLM:
+def investigate(incident: Incident, intent: str, force_rule_based: bool = False) -> InvestigationResult:
+    if force_rule_based or not STRANDS_ENABLE_LLM:
         return _rule_based(incident, intent)
 
     try:

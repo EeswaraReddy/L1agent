@@ -68,8 +68,8 @@ def _llm_act(incident: Incident, intent: str) -> ActionResult:
     return _parse_llm_result(result)
 
 
-def act(incident: Incident, intent: str) -> ActionResult:
-    if not STRANDS_ENABLE_LLM:
+def act(incident: Incident, intent: str, force_rule_based: bool = False) -> ActionResult:
+    if force_rule_based or not STRANDS_ENABLE_LLM:
         return _rule_based(incident, intent)
 
     try:
