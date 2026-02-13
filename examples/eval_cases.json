@@ -1,4 +1,4 @@
-﻿[
+[
   {
     "name": "Glue failure with zero data",
     "incident": {
@@ -6,19 +6,54 @@
       "summary": "Glue ETL job failed. Source data zero bytes.",
       "details": "Job failed with size=0 on S3 input",
       "context": {
-        "source": {"bucket": "my-bucket", "prefix": "inbound/", "min_objects": 1, "min_total_bytes": 1}
+        "glue": {"job_name": "daily_orders_etl"},
+        "source": {"bucket": "my-bucket", "prefix": "inbound/", "min_objects": 1, "min_total_bytes": 1},
+        "glue_retry": {"job_name": "daily_orders_etl"}
       }
     },
-    "expected_decision": "auto_close"
+    "expected_decision": "auto_retry",
+    "expected_workflow": "glue_etl_failure",
+    "min_evidence_coverage": 1.0
+  },
+  {
+    "name": "EMR spin-up failure",
+    "incident": {
+      "incident_id": "INC-2002",
+      "summary": "EMR cluster spin up failed during bootstrap",
+      "details": "Provisioning timeout while launching cluster",
+      "context": {
+        "emr": {"cluster_id": "j-123456", "log_group": "/aws/emr/cluster"},
+        "emr_retry": {"cluster_id": "j-123456"}
+      }
+    },
+    "expected_decision": "escalate",
+    "expected_workflow": "emr_spinup_failed",
+    "min_evidence_coverage": 1.0
+  },
+  {
+    "name": "Glue access denied",
+    "incident": {
+      "incident_id": "INC-2003",
+      "summary": "Glue job access denied for catalog read",
+      "details": "User is not authorized to perform glue:GetTable",
+      "context": {
+        "glue": {"job_name": "sync_inventory"}
+      }
+    },
+    "expected_decision": "escalate",
+    "expected_workflow": "glue_access_denied",
+    "min_evidence_coverage": 1.0
   },
   {
     "name": "Unknown alarm",
     "incident": {
-      "incident_id": "INC-2002",
+      "incident_id": "INC-2004",
       "summary": "Alarm for dlr_grp - unknown",
       "details": "No logs found",
       "context": {}
     },
-    "expected_decision": "human_review"
+    "expected_decision": "human_review",
+    "expected_workflow": "unknown",
+    "min_evidence_coverage": 1.0
   }
 ]

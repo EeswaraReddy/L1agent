@@ -1,4 +1,4 @@
-﻿runtime:
+runtime:
   name: datalake-incident-agent
   entrypoint: agents.main:handler
   python_version: "3.12"
@@ -10,3 +10,10 @@
     RCA_BUCKET: "your-rca-bucket"
     RCA_PREFIX: "rca/"
     STRANDS_ENABLE_LLM: "0"
+    AGENTCORE_POLICY_ENABLED: "0"
+    AGENTCORE_POLICY_ENGINE_ID: ""
+    AGENTCORE_POLICY_STRICT: "0"
+    AGENTCORE_EVALUATION_ENABLED: "0"
+    AGENTCORE_EVALUATOR_ID: ""
+    AGENTCORE_EVALUATION_STRICT: "0"
+    AGENTCORE_MIN_EVAL_SCORE: "0.7"

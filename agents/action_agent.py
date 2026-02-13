@@ -1,46 +1,52 @@
-﻿import json
+import json
 from typing import Dict, Any, List
+
 from .schemas import Incident, ActionResult
 from .config import STRANDS_ENABLE_LLM
 from .agent_factory import build_agent
 from .prompts import ACTION_PROMPT
 from .mcp_tools import call_gateway_tool, list_gateway_tools
 from .tool_registry import resolve_tool_name
+from .workflows import ActionStep, select_workflow
 
 
 def _action_result(intent: str, actions: List[Dict[str, Any]], status: str) -> ActionResult:
     return ActionResult(intent=intent, actions=actions, status=status)
 
 
+def _run_action_step(incident: Incident, step: ActionStep) -> Dict[str, Any]:
+    tool = resolve_tool_name(step.tool_suffix)
+    ctx = incident.context.get(step.context_key, {}) if step.context_key else {}
+    return call_gateway_tool(tool, ctx)
+
+
 def _rule_based(incident: Incident, intent: str) -> ActionResult:
+    workflow = select_workflow(intent, incident)
     actions: List[Dict[str, Any]] = []
 
-    if intent == "emr_failure":
-        tool = resolve_tool_name("retry_emr")
-        action = call_gateway_tool(tool, incident.context.get("emr_retry", {}))
-        actions.append({"retry_emr": action})
-    elif intent in ("dag_failure", "mwaa_failure", "dag_alarm"):
-        tool = resolve_tool_name("retry_airflow_dag")
-        action = call_gateway_tool(tool, incident.context.get("airflow_retry", {}))
-        actions.append({"retry_airflow_dag": action})
-    elif intent == "glue_etl_failure":
-        tool = resolve_tool_name("retry_glue_job")
-        action = call_gateway_tool(tool, incident.context.get("glue_retry", {}))
-        actions.append({"retry_glue_job": action})
-    elif intent == "athena_failure":
-        tool = resolve_tool_name("retry_athena_query")
-        action = call_gateway_tool(tool, incident.context.get("athena_retry", {}))
-        actions.append({"retry_athena_query": action})
-    elif intent == "kafka_events_failed":
-        tool = resolve_tool_name("retry_kafka")
-        action = call_gateway_tool(tool, incident.context.get("kafka_retry", {}))
-        actions.append({"retry_kafka": action})
-    elif intent in ("data_missing", "source_zero_data", "data_not_available"):
-        tool = resolve_tool_name("verify_source_data")
-        action = call_gateway_tool(tool, incident.context.get("source", {}))
-        actions.append({"verify_source_data": action})
-    else:
-        actions.append({"noop": "No automated action for this intent"})
+    if not workflow.auto_retry_allowed and workflow.action_steps:
+        actions.append(
+            {
+                "policy_block": (
+                    f"Workflow {workflow.workflow_id} blocks automatic retries; escalate for manual approval"
+                )
+            }
+        )
+        return _action_result(intent, actions, status="blocked")
+
+    for step in workflow.action_steps:
+        ctx = incident.context.get(step.context_key, {}) if step.context_key else {}
+        if step.context_key and not ctx and step.optional:
+            continue
+
+        try:
+            action_result = _run_action_step(incident, step)
+            actions.append({step.action_key: action_result})
+        except Exception as exc:
+            actions.append({step.action_key: {"error": str(exc)}})
+
+    if not actions:
+        actions.append({"noop": f"No automated action for workflow {workflow.workflow_id}"})
 
     return _action_result(intent, actions, status="completed")
 
@@ -57,6 +63,7 @@ def _llm_act(incident: Incident, intent: str) -> ActionResult:
     agent = build_agent(ACTION_PROMPT, tools=tools)
     payload = incident.model_dump()
     payload["intent"] = intent
+    payload["workflow_id"] = select_workflow(intent, incident).workflow_id
     result = agent(json.dumps(payload))
     return _parse_llm_result(result)
 

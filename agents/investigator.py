@@ -1,11 +1,13 @@
-﻿import json
+import json
 from typing import Dict, Any
+
 from .schemas import Incident, InvestigationResult
 from .config import STRANDS_ENABLE_LLM
 from .agent_factory import build_agent
 from .prompts import INVESTIGATOR_PROMPT
 from .mcp_tools import call_gateway_tool, list_gateway_tools, search_gateway_tools
 from .tool_registry import resolve_tool_name
+from .workflows import InvestigationStep, select_workflow
 
 
 def _search_tool(preferred_suffix: str, query: str) -> str:
@@ -21,37 +23,31 @@ def _search_tool(preferred_suffix: str, query: str) -> str:
     return resolve_tool_name(preferred_suffix)
 
 
-def _rule_based(incident: Incident, intent: str) -> InvestigationResult:
-    evidence: Dict[str, Any] = {"intent": intent}
+def _run_step(incident: Incident, step: InvestigationStep) -> Dict[str, Any]:
+    ctx = incident.context.get(step.context_key, {}) if step.context_key else {}
+    tool = _search_tool(step.tool_suffix, step.query)
+    return call_gateway_tool(tool, ctx)
 
-    if intent == "emr_failure":
-        tool = _search_tool("get_emr_logs", "emr logs")
-        evidence["emr_logs"] = call_gateway_tool(tool, incident.context.get("emr", {}))
-    elif intent in ("dag_failure", "mwaa_failure"):
-        tool = _search_tool("get_mwaa_logs", "mwaa airflow logs")
-        evidence["airflow_logs"] = call_gateway_tool(tool, incident.context.get("airflow", {}))
-    elif intent == "dag_alarm":
-        tool = _search_tool("get_cloudwatch_alarm", "cloudwatch alarm dag mwaa")
-        alarm_ctx = incident.context.get("alarm", {})
-        evidence["dag_alarm"] = call_gateway_tool(tool, alarm_ctx)
-        if "airflow" in incident.context:
-            tool = _search_tool("get_mwaa_logs", "mwaa airflow logs")
-            evidence["airflow_logs"] = call_gateway_tool(tool, incident.context.get("airflow", {}))
-    elif intent == "glue_etl_failure":
-        tool = _search_tool("get_glue_logs", "glue logs")
-        evidence["glue_logs"] = call_gateway_tool(tool, incident.context.get("glue", {}))
-    elif intent == "athena_failure":
-        tool = _search_tool("get_athena_query", "athena query execution error")
-        evidence["athena_query"] = call_gateway_tool(tool, incident.context.get("athena_query", {}))
-    elif intent in ("data_missing", "source_zero_data", "data_not_available"):
-        tool = _search_tool("verify_source_data", "s3 source data validation")
-        evidence["source_check"] = call_gateway_tool(tool, incident.context.get("source", {}))
-        if "s3_logs" in incident.context:
-            tool = _search_tool("get_s3_logs", "s3 logs")
-            evidence["s3_logs"] = call_gateway_tool(tool, incident.context.get("s3_logs", {}))
-    elif intent == "kafka_events_failed":
-        tool = _search_tool("get_kafka_status", "kafka msk status")
-        evidence["kafka_status"] = call_gateway_tool(tool, incident.context.get("kafka", {}))
+
+def _rule_based(incident: Incident, intent: str) -> InvestigationResult:
+    workflow = select_workflow(intent, incident)
+    evidence: Dict[str, Any] = {
+        "intent": intent,
+        "workflow_id": workflow.workflow_id,
+        "service": workflow.service,
+    }
+
+    for step in workflow.investigation_steps:
+        ctx = incident.context.get(step.context_key, {}) if step.context_key else {}
+        if step.context_key and not ctx and step.optional:
+            continue
+
+        try:
+            evidence[step.evidence_key] = _run_step(incident, step)
+        except Exception as exc:
+            evidence[step.evidence_key] = {"error": str(exc)}
+            if not step.optional:
+                evidence.setdefault("step_errors", []).append(step.evidence_key)
 
     return InvestigationResult(intent=intent, evidence=evidence)
 
@@ -68,6 +64,7 @@ def _llm_investigate(incident: Incident, intent: str) -> InvestigationResult:
     agent = build_agent(INVESTIGATOR_PROMPT, tools=tools)
     payload = incident.model_dump()
     payload["intent"] = intent
+    payload["workflow_id"] = select_workflow(intent, incident).workflow_id
     result = agent(json.dumps(payload))
     return _parse_llm_result(result)
 

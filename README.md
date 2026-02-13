@@ -1,36 +1,117 @@
-﻿# Data Lake SRE Agent (AgentCore + Strands)
+# Data Lake SRE Agent (AgentCore + Strands)
 
-This scaffold implements a multi-agent incident handler for AWS data lake failures (EMR, Glue, MWAA/Airflow, S3 source data, Kafka/MSK). It follows the Amazon Bedrock AgentCore pattern of a runtime + MCP gateway for tools and uses Strands Agents for orchestration.
+This project implements an enterprise-style incident handler for AWS data platform failures.
 
-## Design
-- AgentCore Runtime executes `agents/main.py` using `BedrockAgentCoreApp`.
-- AgentCore Gateway exposes Lambda tools via MCP with Cognito/JWT auth.
-- Intent → investigate → action → policy flow with strict schema validation.
-- RCA artifacts are written to S3.
+It combines:
+- Workflow-based orchestration by issue type
+- Strict per-service policy controls
+- Optional Amazon Bedrock AgentCore policy/evaluation governance
+- MCP tool execution through AgentCore Gateway
 
-Design diagram: `docs/design_diagram.md`
+## What It Covers End-to-End
 
-## Repo Structure
-- `infra/` CDK stack for tool Lambdas + S3 RCA bucket
-- `agents/` Strands-based multi-agent workflow (intent -> investigate -> action -> policy)
-- `agentcore/` AgentCore runtime + gateway configs
-- `scripts/` Gateway setup + evaluation scripts
-- `docs/` Design diagram
+Supported domains:
+- EMR failures (including cluster spin-up failures)
+- MWAA/Airflow DAG failures and alarms
+- Glue ETL failures and Glue access/permission incidents
+- Athena query failures
+- Kafka/MSK event pipeline failures
+- Source data missing/zero-data scenarios (S3)
 
-## End-to-End Flow
-1. Incident payload arrives at the orchestrator.
-2. **Intent Classifier** assigns intent from short description.
-3. **Investigator** uses AgentCore Gateway semantic tool search + MCP calls.
-4. **Action Agent** performs safe retries or validations when allowed.
-5. **Policy Engine** scores confidence + evidence and selects a decision.
-6. **ServiceNow Update** is executed (if credentials provided).
-7. RCA is written to S3 and returned to the caller.
+End-to-end lifecycle:
+1. Receive incident payload
+2. Classify intent
+3. Select workflow from intent + context
+4. Run investigation steps (logs/status/alarms/source checks)
+5. Run action steps (retries or safe no-op)
+6. Evaluate coverage and risk gates
+7. Apply local policy + service policy pack
+8. Optionally apply AgentCore governance (policy engine + online evaluation)
+9. Build RCA, optionally update ServiceNow, optionally write RCA to S3
 
-## Quick Start
+## Architecture and Design
 
-### 1) Deploy Lambdas + RCA Bucket
+Main runtime entry:
+- `agents/main.py`
 
-```
+Orchestrator:
+- `agents/orchestrator.py`
+
+Core design modules:
+- `agents/workflows.py`: workflow catalog + routing logic
+- `agents/investigator.py`: workflow-driven evidence collection
+- `agents/action_agent.py`: workflow-driven actions with safety blocks
+- `agents/evaluation.py`: evidence/action coverage and hard-stop checks
+- `agents/policy.py`: base policy scoring and decision composition
+- `agents/service_policy_pack.py`: strict service-specific guardrails
+- `agents/agentcore_governance.py`: optional AgentCore policy/evaluation enforcement
+
+Detailed diagram:
+- `docs/design_diagram.md`
+
+## Workflow Model
+
+Workflow selection is intent-aware and context-aware.
+
+Examples:
+- `emr_failure` + spin/bootstrap wording -> `emr_spinup_failed`
+- `dag_failure`/`dag_alarm`/`mwaa_failure` -> `airflow_dag_failure`
+- `access_denied` + Glue context -> `glue_access_denied`
+
+Each workflow defines:
+- Required investigation steps
+- Required action steps
+- Minimum confidence
+- Risk tier
+- Auto-retry allowance
+- Required evidence/action keys
+
+## Policy Model
+
+Decision layering:
+1. Base policy score (`agents/policy.py`)
+2. Workflow-aware evaluation constraints (`agents/evaluation.py`)
+3. Strict service policy pack (`agents/service_policy_pack.py`)
+4. Optional AgentCore governance (`agents/agentcore_governance.py`)
+
+Service policy pack behavior (strict):
+- EMR spin-up failures: escalation/human-review gates when confidence or coverage is weak
+- Glue access-denied: blocks auto-retry and forces escalation
+- MWAA: requires full coverage; low confidence can force human review
+- Athena: blocks retries on non-retryable query states
+- Kafka: forces human review for safety
+
+## AgentCore Governance Integration (Optional)
+
+Supported APIs:
+- `bedrock-agentcore-control`: policy engine/evaluator metadata checks
+- `bedrock-agentcore`: runtime `Evaluate` calls
+
+Environment flags:
+- `AGENTCORE_POLICY_ENABLED`
+- `AGENTCORE_POLICY_ENGINE_ID`
+- `AGENTCORE_POLICY_STRICT`
+- `AGENTCORE_EVALUATION_ENABLED`
+- `AGENTCORE_EVALUATOR_ID`
+- `AGENTCORE_EVALUATION_STRICT`
+- `AGENTCORE_MIN_EVAL_SCORE`
+
+If strict mode is enabled and governance is unavailable or failing, decision is pushed to `human_review`.
+
+## Repository Structure
+
+- `infra/`: CDK stack (tool Lambdas + RCA bucket)
+- `agents/`: orchestration and policy modules
+- `agentcore/`: runtime and gateway configs
+- `scripts/`: deployment, gateway setup, regressions, smoke tests
+- `examples/`: incident payloads and regression datasets
+- `docs/`: diagrams and operations guidance
+
+## Deployment
+
+### 1) Deploy infrastructure
+
+```powershell
 cd infra
 python -m venv .venv
 . .\.venv\Scripts\Activate.ps1
@@ -39,89 +120,87 @@ cdk synth
 cdk deploy
 ```
 
-Outputs:
-- `RcaBucketName`
-- Lambda ARNs for each tool
+Or use helper script:
+
+```powershell
+powershell -File scripts\deploy.ps1
+```
 
 ### 2) Configure AgentCore Gateway
 
-1. Update `agentcore/gateway_config.json` with Gateway + Cognito config.
-2. Update `agentcore/gateway_tools.json` with the Lambda ARNs from CDK outputs.
-3. Create gateway + targets:
+1. Fill `agentcore/gateway_config.json`
+2. Fill `agentcore/gateway_tools.json` with deployed Lambda ARNs
+3. Run:
 
-```
-python scripts/setup_gateway.py
+```powershell
+python scripts\setup_gateway.py
 ```
 
-### 3) Configure Environment
+### 3) Configure environment
 
-```
+```powershell
 copy .env.example .env
 ```
 
-Set at minimum:
+Minimum required:
 - `AWS_REGION`
 - `BEDROCK_REGION`
 - `MODEL_ID`
 - `GATEWAY_CONFIG_PATH`
-- `RCA_BUCKET`
+- `RCA_BUCKET` (if RCA persistence needed)
 
-Optional for ServiceNow updates:
-- `SERVICENOW_INSTANCE_URL`
-- `SERVICENOW_USERNAME`
-- `SERVICENOW_PASSWORD`
+## Running
 
-### 4) Run the Agent Locally
+Local incident run:
 
-```
-python -m venv .venv
-. .\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-
+```powershell
+$env:PYTHONPATH='.'
 python -m agents.main --input examples/incident.json
 ```
 
-### 5) End-to-End Verification (Manual)
-1. Confirm gateway targets exist and are healthy.
-2. Run `python -m agents.main --input examples/incident.json`.
-3. Verify an RCA JSON file was created under `s3://<RCA_BUCKET>/<RCA_PREFIX>/`.
+## Validation and Testing
 
-### 6) Policy Evaluation
+Workflow regression:
 
-```
-python scripts/run_eval.py
+```powershell
+$env:PYTHONPATH='.'
+python scripts\run_eval.py
 ```
 
-## Intent Taxonomy (Current)
-- `dag_failure`
-- `dag_alarm`
-- `mwaa_failure`
-- `glue_etl_failure`
-- `athena_failure`
-- `emr_failure`
-- `kafka_events_failed`
-- `data_missing`
-- `source_zero_data`
-- `data_not_available`
-- `batch_auto_recovery_failed`
-- `access_denied`
-- `unknown`
+Policy pack regression:
 
-## Tools (Gateway Targets)
-- `get_emr_logs`
-- `get_glue_logs`
-- `get_mwaa_logs`
-- `get_cloudwatch_alarm`
-- `get_athena_query`
-- `verify_source_data`
-- `get_s3_logs`
-- `retry_emr`
-- `retry_glue_job`
-- `retry_airflow_dag`
-- `retry_athena_query`
-- `retry_kafka`
-- `update_servicenow_ticket`
+```powershell
+$env:PYTHONPATH='.'
+python scripts\run_policy_regression.py
+```
 
-## Testing Status
-- End-to-end flow has **not** been executed in this environment.
-- Use the manual verification and evaluation steps above to validate in your AWS account.
+AgentCore governance regression (offline logic):
+
+```powershell
+$env:PYTHONPATH='.'
+python scripts\run_agentcore_governance_regression.py
+```
+
+Dummy E2E (stubbed dependencies, no live AWS required):
+
+```powershell
+$env:PYTHONPATH='.'
+python scripts\run_dummy_e2e.py
+```
+
+Live AgentCore smoke:
+
+```powershell
+$env:PYTHONPATH='.'
+python scripts\run_agentcore_live_smoke.py --region us-east-1 --policy-engine-id <id> --evaluator-id <id>
+```
+
+## Current Status
+
+Implemented:
+- Workflow orchestration by issue type
+- Strict per-service policy pack
+- AgentCore governance integration hooks
+- Regression suites and dummy E2E runner
+
+To run live governance end-to-end, configure valid AWS credentials plus real AgentCore Policy Engine/Evaluator IDs.

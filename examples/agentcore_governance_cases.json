@@ -1,0 +1,26 @@
+[
+  {
+    "name": "Policy strict mode blocks when engine inactive",
+    "decision": "auto_retry",
+    "policy_context": {"ok": true, "engine_status": "CREATING"},
+    "evaluation_context": {"ok": true, "min_score": 0.95},
+    "expected_decision": "human_review",
+    "reason_token": "policy strict mode"
+  },
+  {
+    "name": "Evaluation strict mode blocks on low score",
+    "decision": "escalate",
+    "policy_context": {"ok": true, "engine_status": "ACTIVE"},
+    "evaluation_context": {"ok": true, "min_score": 0.4},
+    "expected_decision": "human_review",
+    "reason_token": "below threshold"
+  },
+  {
+    "name": "All green keeps decision",
+    "decision": "escalate",
+    "policy_context": {"ok": true, "engine_status": "ACTIVE"},
+    "evaluation_context": {"ok": true, "min_score": 0.95},
+    "expected_decision": "escalate",
+    "reason_token": ""
+  }
+]
